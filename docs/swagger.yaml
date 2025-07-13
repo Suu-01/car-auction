@@ -1,0 +1,41 @@
+definitions:
+  api.PaginatedResponse:
+    properties:
+      data:
+        items: {}
+        type: array
+      page:
+        type: integer
+      size:
+        type: integer
+      total_count:
+        type: integer
+    type: object
+info:
+  contact: {}
+paths:
+  /auctions:
+    get:
+      description: 페이징, 검색 가능한 경매 목록을 조회합니다.
+      parameters:
+      - description: 페이지 번호
+        in: query
+        name: page
+        type: integer
+      - description: 페이지 크기
+        in: query
+        name: size
+        type: integer
+      - description: 제목 필터
+        in: query
+        name: title
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/api.PaginatedResponse'
+      summary: 경매 목록 조회
+      tags:
+      - auctions
+swagger: "2.0"

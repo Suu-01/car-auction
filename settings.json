@@ -1,0 +1,8 @@
+{
+  "go.useLanguageServer": true,
+  // gopls가 GOROOT를 정확히 찾도록 직접 지정(선택 사항)
+  "go.goroot": "C:\\Program Files\\Go",
+  // GOPATH 모드로 회귀하지 않도록
+  "go.inferGopath": false,
+  "go.gopathInfer": false
+}
