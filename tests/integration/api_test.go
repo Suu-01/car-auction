@@ -122,7 +122,7 @@ func TestBidPagination(t *testing.T) {
 		Page, Size int
 		TotalCount int64 `json:"total_count"`
 	}
-	json.NewDecoder(resp.Body).Decode(&pr)
+	_ = json.NewDecoder(resp.Body).Decode(&pr)
 	assert.Equal(t, 2, pr.Page)
 	assert.Equal(t, 5, pr.Size)
 	assert.Equal(t, int64(12), pr.TotalCount)

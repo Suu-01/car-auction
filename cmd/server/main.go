@@ -58,7 +58,9 @@ func main() {
 	userSvc := service.NewUserService(userRepo)
 
 	shutdown := tracing.Init()
-	defer shutdown(context.Background())
+	defer func() {
+		_ = shutdown(context.Background())
+	}()
 
 	// 5) 라우터 설정
 	r := mux.NewRouter()

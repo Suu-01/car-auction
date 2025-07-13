@@ -23,6 +23,6 @@ func RegisterUserRoutes(r *mux.Router, svc *service.UserService) {
 			http.Error(w, "invalid credentials", http.StatusUnauthorized)
 			return
 		}
-		json.NewEncoder(w).Encode(map[string]string{"token": tok})
+		_ = json.NewEncoder(w).Encode(map[string]string{"token": tok})
 	}).Methods("POST")
 }

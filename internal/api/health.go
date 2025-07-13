@@ -2,6 +2,7 @@
 package api
 
 import (
+	stdlog "log"
 	"net/http"
 
 	"github.com/gorilla/mux"
@@ -11,6 +12,9 @@ import (
 func RegisterHealthRoute(r *mux.Router) {
 	r.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("ok"))
+		if _, err := w.Write([]byte("ok")); err != nil {
+			// 보통 health 체크에서는 로그만 남깁니다.
+			stdlog.Println("health write failed:", err)
+		}
 	}).Methods(http.MethodGet)
 }

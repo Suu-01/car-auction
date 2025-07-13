@@ -40,7 +40,7 @@ func RegisterBidRoutes(r *mux.Router, svc *service.BidService) {
 		for i, b := range bids {
 			resp.Data[i] = b
 		}
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}).Methods(http.MethodGet)
 
 	// POST /auctions/{id}/bids (인증 필요)
@@ -71,6 +71,6 @@ func RegisterBidRoutes(r *mux.Router, svc *service.BidService) {
 			return
 		}
 		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(bid)
+		_ = json.NewEncoder(w).Encode(bid)
 	}).Methods(http.MethodPost)
 }
