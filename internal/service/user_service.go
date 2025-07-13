@@ -42,7 +42,7 @@ func (s *UserService) Signup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(map[string]any{"id": u.ID, "email": u.Email})
+	_ = json.NewEncoder(w).Encode(map[string]any{"id": u.ID, "email": u.Email})
 }
 
 // Login: 이메일/비밀번호 검증 후 JWT 토큰을 반환합니다.

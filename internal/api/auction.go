@@ -41,7 +41,7 @@ func listAuctionsHandler(svc *service.AuctionService) http.HandlerFunc {
 		for i, v := range items {
 			resp.Data[i] = v
 		}
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}
 }
 
@@ -59,7 +59,7 @@ func getAuctionHandler(svc *service.AuctionService) http.HandlerFunc {
 			http.Error(w, err.Error(), http.StatusNotFound)
 			return
 		}
-		json.NewEncoder(w).Encode(a)
+		_ = json.NewEncoder(w).Encode(a)
 	}
 }
 
@@ -82,7 +82,7 @@ func createAuctionHandler(svc *service.AuctionService) http.HandlerFunc {
 			return
 		}
 		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(a)
+		_ = json.NewEncoder(w).Encode(a)
 	}
 }
 
@@ -110,7 +110,7 @@ func updateAuctionHandler(svc *service.AuctionService) http.HandlerFunc {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		json.NewEncoder(w).Encode(a)
+		_ = json.NewEncoder(w).Encode(a)
 	}
 }
 

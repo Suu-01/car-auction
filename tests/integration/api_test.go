@@ -78,7 +78,9 @@ func TestBidPagination(t *testing.T) {
 	// 2) 로그인 → 토큰 획득
 	resp, _ = http.Post(server.URL+"/users/login", "application/json", bytes.NewReader(b))
 	var loginRes struct{ Token string }
-	json.NewDecoder(resp.Body).Decode(&loginRes)
+	if err := json.NewDecoder(resp.Body).Decode(&loginRes); err != nil {
+		t.Fatalf("로그인 응답 파싱 실패: %v", err)
+	}
 	token := loginRes.Token
 
 	// 3) 경매 생성
@@ -93,7 +95,9 @@ func TestBidPagination(t *testing.T) {
 	resp, _ = http.DefaultClient.Do(rA)
 	assert.Equal(t, http.StatusCreated, resp.StatusCode)
 	var aRes model.Auction
-	json.NewDecoder(resp.Body).Decode(&aRes)
+	if err := json.NewDecoder(resp.Body).Decode(&aRes); err != nil {
+		t.Fatalf("로그인 응답 파싱 실패: %v", err)
+	}
 
 	// 4) 여러 번 입찰
 	for i := 1; i <= 12; i++ {

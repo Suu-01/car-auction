@@ -21,7 +21,7 @@ var Cfg *Config
 
 func Load() {
 	// .env 파일도 먼저 로드 (선택)
-	godotenv.Load()
+	_ = godotenv.Load()
 
 	port := os.Getenv("PORT")
 	if port == "" {

@@ -25,12 +25,16 @@ import (
 
 func healthHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("ok"))
+	if _, err := w.Write([]byte("ok")); err != nil {
+		log.Logger.Error("health write failed", zap.Error(err))
+	}
 }
 
 func main() {
 	log.Init()
-	defer log.Logger.Sync()
+	defer func() {
+		_ = log.Logger.Sync()
+	}()
 
 	// 1) 설정 로드: .env + 환경변수
 	config.Load()
