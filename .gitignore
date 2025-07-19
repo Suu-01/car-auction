@@ -1,0 +1,12 @@
+# .env 파일
+.env
+.env.local
+
+# node_modules
+frontend/node_modules/
+node_modules/
+
+# 빌드 결과물
+frontend/dist
+car-auction-app
+uploads/

@@ -5,10 +5,13 @@ import (
 	"gorm.io/gorm"
 )
 
+// AuctionRepo はオークションの永続化を担当するリポジトリです
 type AuctionRepo struct{ DB *gorm.DB }
 
+// NewAuctionRepo は新しい AuctionRepo を生成します
 func NewAuctionRepo(db *gorm.DB) *AuctionRepo { return &AuctionRepo{DB: db} }
 
+// FindAll は全オークションを取得します
 func (r *AuctionRepo) FindAll() ([]model.Auction, error) {
 	var auctions []model.Auction
 	if err := r.DB.Find(&auctions).Error; err != nil {
@@ -17,11 +20,12 @@ func (r *AuctionRepo) FindAll() ([]model.Auction, error) {
 	return auctions, nil
 }
 
+// Create は新しいオークションをデータベースに保存します
 func (r *AuctionRepo) Create(a *model.Auction) error {
 	return r.DB.Create(a).Error
 }
 
-// FindPaginated: offset, limit, optional title 검색어로 페이징 조회
+// FindPaginated はオフセット・リミット・タイトルフィルタを使ってオークションをページング取得します
 func (r *AuctionRepo) FindPaginated(offset, limit int, titleFilter string) ([]model.Auction, error) {
 	var auctions []model.Auction
 	q := r.DB.Model(&model.Auction{})
@@ -34,7 +38,7 @@ func (r *AuctionRepo) FindPaginated(offset, limit int, titleFilter string) ([]mo
 	return auctions, nil
 }
 
-// Count: 전체 레코드 수(필터 적용 전/후 구분 가능)
+// Count はタイトルフィルタ適用後のオークション総件数を返します
 func (r *AuctionRepo) Count(titleFilter string) (int64, error) {
 	var total int64
 	q := r.DB.Model(&model.Auction{})
@@ -47,10 +51,12 @@ func (r *AuctionRepo) Count(titleFilter string) (int64, error) {
 	return total, nil
 }
 
-func (r *AuctionRepo) Delete(id uint) error {
+// DeleteByID は指定IDのオークションを削除します
+func (r *AuctionRepo) DeleteByID(id uint) error {
 	return r.DB.Delete(&model.Auction{}, id).Error
 }
 
+// Update は指定されたオークションのタイトル・説明・開始価格・終了日時を更新します
 func (r *AuctionRepo) Update(a *model.Auction) error {
 	return r.DB.Model(&model.Auction{}).
 		Where("id = ?", a.ID).
@@ -62,10 +68,12 @@ func (r *AuctionRepo) Update(a *model.Auction) error {
 		}).Error
 }
 
+// FindByID は指定IDのオークションを取得します
 func (r *AuctionRepo) FindByID(id uint) (*model.Auction, error) {
 	var a model.Auction
-	if err := r.DB.First(&a, id).Error; err != nil {
-		return nil, err
+	tx := r.DB.First(&a, id)
+	if tx.Error != nil {
+		return nil, tx.Error
 	}
 	return &a, nil
 }

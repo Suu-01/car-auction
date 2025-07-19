@@ -2,21 +2,28 @@ package service
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/ksj/car-auction/internal/model"
 	"github.com/ksj/car-auction/internal/repo"
 )
 
-// CreateAuctionRequest: API에서 받을 JSON과 1:1 매핑되는 DTO
+// CreateAuctionRequest は API から受け取る JSON と 1:1 でマッピングされる DTO です
 type CreateAuctionRequest struct {
 	Title       string    `json:"title"`
 	Description string    `json:"description"`
 	StartPrice  int       `json:"start_price"`
 	EndAt       time.Time `json:"end_at"`
+
+	Maker     string `json:"maker"`
+	ModelName string `json:"model_name"`
+	Mileage   int    `json:"mileage"`
+	Year      int    `json:"year"`
+	PhotoURL  string `json:"photo_url"`
 }
 
-// UpdateAuctionRequest: 수정 가능한 필드만
+// UpdateAuctionRequest は更新可能なフィールドのみを保持する DTO です
 type UpdateAuctionRequest struct {
 	Title       *string    `json:"title,omitempty"`
 	Description *string    `json:"description,omitempty"`
@@ -24,28 +31,36 @@ type UpdateAuctionRequest struct {
 	EndAt       *time.Time `json:"end_at,omitempty"`
 }
 
-// AuctionService 는 비즈니스 로직을 담당합니다.
+// AuctionService はオークションのビジネスロジックを担当します
 type AuctionService struct {
 	repo *repo.AuctionRepo
 }
 
-// NewAuctionService: repo를 주입받아 생성
+// NewAuctionService はリポジトリを注入して AuctionService を生成します
 func NewAuctionService(r *repo.AuctionRepo) *AuctionService {
 	return &AuctionService{repo: r}
 }
 
-// ListAuctions: 전체 경매 목록 조회 (GET)
+// ListAuctions は全オークションを取得します (GET)
 func (s *AuctionService) ListAuctions() ([]model.Auction, error) {
 	return s.repo.FindAll()
 }
 
-// CreateAuction: 인증된 사용자(userID)와 요청 DTO로 새 경매 생성 (POST)
-func (s *AuctionService) CreateAuction(userID uint, req CreateAuctionRequest) (*model.Auction, error) {
+// CreateAuction は認証済みユーザー (sellerID) とリクエスト DTO を使って新規オークションを作成します (POST)
+func (s *AuctionService) CreateAuction(sellerID uint, req CreateAuctionRequest) (*model.Auction, error) {
+	if req.Title == "" || req.StartPrice <= 0 || req.Maker == "" || req.ModelName == "" {
+		return nil, errors.New("invalid request")
+	}
 	a := &model.Auction{
 		Title:       req.Title,
 		Description: req.Description,
 		StartPrice:  req.StartPrice,
-		OwnerID:     userID,
+		Maker:       req.Maker,
+		ModelName:   req.ModelName,
+		Mileage:     req.Mileage,
+		Year:        req.Year,
+		PhotoURL:    req.PhotoURL,
+		SellerID:    sellerID,
 		CreatedAt:   time.Now(),
 		EndAt:       req.EndAt,
 	}
@@ -55,9 +70,9 @@ func (s *AuctionService) CreateAuction(userID uint, req CreateAuctionRequest) (*
 	return a, nil
 }
 
-// UpdateAuction: 소유자 체크 후 업데이트
+// UpdateAuction は所有者チェック後にオークション情報を更新します
 func (s *AuctionService) UpdateAuction(userID, id uint, req UpdateAuctionRequest) (*model.Auction, error) {
-	// 1) 기존 경매 조회
+	// 1) 既存オークション取得
 	list, err := s.repo.FindAll()
 	if err != nil {
 		return nil, err
@@ -72,11 +87,11 @@ func (s *AuctionService) UpdateAuction(userID, id uint, req UpdateAuctionRequest
 	if existing == nil {
 		return nil, errors.New("auction not found")
 	}
-	// 2) 소유자(userID)만 수정 허용
-	if existing.OwnerID != userID {
+	// 2) 所有者チェック
+	if existing.SellerID != userID {
 		return nil, errors.New("forbidden: not owner")
 	}
-	// 3) 변경 요청 반영
+	// 3) フィールド更新
 	if req.Title != nil {
 		existing.Title = *req.Title
 	}
@@ -89,34 +104,44 @@ func (s *AuctionService) UpdateAuction(userID, id uint, req UpdateAuctionRequest
 	if req.EndAt != nil {
 		existing.EndAt = *req.EndAt
 	}
-	// 4) DB 업데이트
+	// 4) 永続化更新
 	if err := s.repo.Update(existing); err != nil {
 		return nil, err
 	}
 	return existing, nil
 }
 
-// DeleteAuction: ID로 경매 삭제 (DELETE)
-func (s *AuctionService) DeleteAuction(userID uint, auctionID uint) error {
-	// 1) 경매 조회
-	a, err := s.repo.FindByID(auctionID)
-	if err != nil {
+// DeleteAuction はオークションを削除します（所有者のみ実行可能）
+func (s *AuctionService) DeleteAuction(auctionID, userID uint) error {
+	// 1) オークション情報取得
+	var auc model.Auction
+	if err := s.repo.DB.First(&auc, auctionID).Error; err != nil {
 		return err
 	}
-	// 2) 소유자 검증
-	if a.OwnerID != userID {
-		return errors.New("forbidden")
+	// 2) 所有者チェック
+	if auc.SellerID != userID {
+		return errors.New("unauthorized")
 	}
-	// 3) 삭제
-	return s.repo.Delete(auctionID)
+	// 3) 削除実行
+	if err := s.repo.DeleteByID(auctionID); err != nil {
+		return err
+	}
+	return nil
 }
 
+// GetAuction は指定された ID のオークションを取得します。
+// 見つからない場合はエラーを返します。
 func (s *AuctionService) GetAuction(id uint) (*model.Auction, error) {
-	return s.repo.FindByID(id)
+	a, err := s.repo.FindByID(id)
+	if err != nil {
+		return nil, fmt.Errorf("auction %d not found: %w", id, err)
+	}
+	return a, nil
 }
 
-// PaginatedAuctions: page(1-based), size, titleFilter 로 조회
-// 반환값: 경매목록, 전체개수(total), 오류
+// PaginatedAuctions は page (1 ベース)、size、titleFilter を使って
+// ページングされたオークション一覧と総件数を返します。
+// 戻り値: オークション一覧 ([]model.Auction)、総件数 (int64)、エラー (error)
 func (s *AuctionService) PaginatedAuctions(page, size int, titleFilter string) ([]model.Auction, int64, error) {
 	if page < 1 {
 		page = 1
@@ -126,13 +151,13 @@ func (s *AuctionService) PaginatedAuctions(page, size int, titleFilter string) (
 	}
 	offset := (page - 1) * size
 
-	// 1) 페이징된 목록 조회
+	// 1) ページングされた一覧を取得
 	auctions, err := s.repo.FindPaginated(offset, size, titleFilter)
 	if err != nil {
 		return nil, 0, err
 	}
 
-	// 2) 전체 개수 조회
+	// 2) 総件数を取得
 	total, err := s.repo.Count(titleFilter)
 	if err != nil {
 		return nil, 0, err

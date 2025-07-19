@@ -2,48 +2,58 @@ package api
 
 import (
 	"context"
+	"log"
 	"net/http"
-	"os"
 	"strings"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/gorilla/mux"
 	"github.com/ksj/car-auction/internal/config"
 )
 
 type ctxKey string
 
-const userIDKey ctxKey = "user_id"
+const (
+	userIDKey ctxKey = "user_id"
+	roleKey   ctxKey = "user_role"
+)
 
+// AuthMiddleware は JWT を検証し、user_id と role をコンテキストに保存します
 func AuthMiddleware(next http.Handler) http.Handler {
-	if os.Getenv("DISABLE_AUTH") == "true" {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// 유효한 첫 번째(유일한) 테스트 유저 ID는 1이라고 가정
-			ctx := context.WithValue(r.Context(), userIDKey, uint(1))
-			next.ServeHTTP(w, r.WithContext(ctx))
-		})
-	}
-
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		auth := r.Header.Get("Authorization")
-		parts := strings.SplitN(auth, " ", 2)
+		// 1) Authorization ヘッダーの取得
+		authHeader := r.Header.Get("Authorization")
+		if authHeader == "" {
+			http.Error(w, "authorization header is required", http.StatusUnauthorized)
+			return
+		}
+		// 2) "Bearer トークン" 形式の検証
+		log.Printf("[AUTH DBG] Authorization header: %q\n", authHeader)
+
+		parts := strings.SplitN(authHeader, " ", 2)
 		if len(parts) != 2 || parts[0] != "Bearer" {
 			http.Error(w, "authorization header format must be Bearer {token}", http.StatusUnauthorized)
 			return
 		}
 
+		// 3) JWT のパース
 		token, err := jwt.Parse(parts[1], func(token *jwt.Token) (interface{}, error) {
-			return config.Cfg.JwtSecret, nil
+			return []byte(config.Cfg.JwtSecret), nil
 		})
 		if err != nil || !token.Valid {
 			http.Error(w, "invalid token", http.StatusUnauthorized)
+			log.Printf("[AUTH DBG] token parse error: %v\n", err)
 			return
 		}
 
+		// 4) Claims の取得
 		claims, ok := token.Claims.(jwt.MapClaims)
 		if !ok {
 			http.Error(w, "invalid token claims", http.StatusUnauthorized)
 			return
 		}
+
+		// 5) user_id と role の抽出
 		uidFloat, ok := claims["user_id"].(float64)
 		if !ok {
 			http.Error(w, "invalid user_id claim", http.StatusUnauthorized)
@@ -51,13 +61,37 @@ func AuthMiddleware(next http.Handler) http.Handler {
 		}
 		userID := uint(uidFloat)
 
+		role, ok := claims["role"].(string)
+		if !ok {
+			http.Error(w, "invalid role claim", http.StatusUnauthorized)
+			return
+		}
+		log.Printf("[AUTH DBG] authenticated user=%d, role=%q\n", userID, role)
+
+		// 6) コンテキストに保存して次のハンドラーへ
 		ctx := context.WithValue(r.Context(), userIDKey, userID)
+		ctx = context.WithValue(ctx, roleKey, role)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 
-// FromContext 는 핸들러에서 context로부터 user_id를 꺼내는 헬퍼
-func FromContext(r *http.Request) (uint, bool) {
-	id, ok := r.Context().Value(userIDKey).(uint)
-	return id, ok
+// FromContext はコンテキストから user_id と role を取得します
+func FromContext(r *http.Request) (userID uint, role string, ok bool) {
+	uid, ok1 := r.Context().Value(userIDKey).(uint)
+	rl, ok2 := r.Context().Value(roleKey).(string)
+	return uid, rl, ok1 && ok2
+}
+
+// RequireRole は指定されたロールのみアクセスを許可するミドルウェアを返します
+func RequireRole(wantRole string) mux.MiddlewareFunc {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, role, ok := FromContext(r)
+			if !ok || role != wantRole {
+				http.Error(w, "forbidden", http.StatusForbidden)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
 }

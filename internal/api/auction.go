@@ -9,22 +9,20 @@ import (
 	"github.com/ksj/car-auction/internal/service"
 )
 
-// @Summary      페이징된 경매 목록 조회
-// @Description  page, size, title(검색) 파라미터로 경매 목록을 조회합니다.
-// @Tags         Auction
-// @Accept       json
-// @Produce      json
-// @Param        page     query      int     false  "페이지 번호"      default(1)
-// @Param        size     query      int     false  "페이지 크기"      default(10)
-// @Param        title    query      string  false  "검색 키워드"
-// @Success      200      {object}   api.PaginatedResponse
-// @Failure      500      {object}   api.ErrorResponse
-// @Router       /auctions [get]
+// 1) GET /auctions
+// オークションの一覧をページネーション付きで取得するハンドラ
 func listAuctionsHandler(svc *service.AuctionService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		page, _ := strconv.Atoi(r.URL.Query().Get("page"))
-		size, _ := strconv.Atoi(r.URL.Query().Get("size"))
-		title := r.URL.Query().Get("title")
+		q := r.URL.Query()
+		page, err := strconv.Atoi(q.Get("page"))
+		if err != nil || page < 1 {
+			page = 1
+		}
+		size, err := strconv.Atoi(q.Get("size"))
+		if err != nil || size < 1 {
+			size = 10
+		}
+		title := q.Get("title")
 
 		items, total, err := svc.PaginatedAuctions(page, size, title)
 		if err != nil {
@@ -46,6 +44,7 @@ func listAuctionsHandler(svc *service.AuctionService) http.HandlerFunc {
 }
 
 // 2) GET /auctions/{id}
+// 指定IDのオークション詳細を取得するハンドラ
 func getAuctionHandler(svc *service.AuctionService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		idStr := mux.Vars(r)["id"]
@@ -64,9 +63,10 @@ func getAuctionHandler(svc *service.AuctionService) http.HandlerFunc {
 }
 
 // 3) POST /auctions
+// 新規オークションを作成するハンドラ（販売者のみ）
 func createAuctionHandler(svc *service.AuctionService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := FromContext(r)
+		userID, _, ok := FromContext(r)
 		if !ok {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
@@ -87,9 +87,10 @@ func createAuctionHandler(svc *service.AuctionService) http.HandlerFunc {
 }
 
 // 4) PUT /auctions/{id}
+// 既存オークションを更新するハンドラ（認証ユーザーのみ）
 func updateAuctionHandler(svc *service.AuctionService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := FromContext(r)
+		userID, _, ok := FromContext(r)
 		if !ok {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
@@ -115,39 +116,49 @@ func updateAuctionHandler(svc *service.AuctionService) http.HandlerFunc {
 }
 
 // 5) DELETE /auctions/{id}
-func deleteAuctionHandler(svc *service.AuctionService) http.HandlerFunc {
+// オークションを削除するハンドラ（認証ユーザーのみ）
+func DeleteAuctionHandler(svc *service.AuctionService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := FromContext(r)
-		if !ok {
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
+		// コンテキストからユーザーID取得
+		uidAny := r.Context().Value(userIDKey)
+		if uidAny == nil {
+			http.Error(w, "no user", http.StatusUnauthorized)
 			return
 		}
-		idStr := mux.Vars(r)["id"]
-		id, err := strconv.Atoi(idStr)
+		userID := uidAny.(uint)
+
+		vars := mux.Vars(r)
+		id64, err := strconv.ParseUint(vars["id"], 10, 32)
 		if err != nil {
-			http.Error(w, "invalid auction id", http.StatusBadRequest)
+			http.Error(w, "invalid id", http.StatusBadRequest)
 			return
 		}
-		if err := svc.DeleteAuction(userID, uint(id)); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+		auctionID := uint(id64)
+
+		if err := svc.DeleteAuction(auctionID, userID); err != nil {
+			if err.Error() == "unauthorized" {
+				http.Error(w, "forbidden", http.StatusForbidden)
+			} else {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+			}
 			return
 		}
+
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
 
+// RegisterAuctionRoutes: オークション関連のルートを登録
 func RegisterAuctionRoutes(r *mux.Router, svc *service.AuctionService) {
-	// 1) /auctions 아래로 묶기
 	ar := r.PathPrefix("/auctions").Subrouter()
 
-	// public
 	ar.HandleFunc("", listAuctionsHandler(svc)).Methods(http.MethodGet)
-	ar.HandleFunc("/{id}", getAuctionHandler(svc)).Methods(http.MethodGet)
 
-	// protected
-	post := ar.Methods(http.MethodPost).Subrouter()
-	post.Use(AuthMiddleware)
-	post.HandleFunc("", createAuctionHandler(svc)).Methods(http.MethodPost)
+	ar.HandleFunc("/{id:[0-9]+}", getAuctionHandler(svc)).Methods(http.MethodGet)
+
+	seller := ar.Methods(http.MethodPost).Subrouter()
+	seller.Use(AuthMiddleware, RequireRole("seller"))
+	seller.HandleFunc("", createAuctionHandler(svc)).Methods(http.MethodPost)
 
 	put := ar.Methods(http.MethodPut).Subrouter()
 	put.Use(AuthMiddleware)
@@ -155,5 +166,5 @@ func RegisterAuctionRoutes(r *mux.Router, svc *service.AuctionService) {
 
 	del := ar.Methods(http.MethodDelete).Subrouter()
 	del.Use(AuthMiddleware)
-	del.HandleFunc("/{id}", deleteAuctionHandler(svc)).Methods(http.MethodDelete)
+	del.HandleFunc("/{id}", DeleteAuctionHandler(svc)).Methods(http.MethodDelete)
 }

@@ -1,8 +1,15 @@
 {
+  // Go 言語サーバー(gopls)を有効化します
   "go.useLanguageServer": true,
-  // gopls가 GOROOT를 정확히 찾도록 직접 지정(선택 사항)
+  // gopls が正しい GOROOT を見つけられるように手動で指定します (任意)
   "go.goroot": "C:\\Program Files\\Go",
-  // GOPATH 모드로 회귀하지 않도록
+  // GOPATH モードへのフォールバックを抑制します
   "go.inferGopath": false,
-  "go.gopathInfer": false
+  "go.gopathInfer": false,
+  // 1) .css ファイルを PostCSS モードとして扱います
+  "files.associations": {
+    "*.css": "postcss"
+  },
+  // 2) CSS の lint で未知の at-rule に関する警告を無視します
+  "css.lint.unknownAtRules": "ignore"
 }

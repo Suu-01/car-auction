@@ -17,6 +17,7 @@ import (
 	"github.com/ksj/car-auction/internal/model"
 	"github.com/ksj/car-auction/internal/repo"
 	"github.com/ksj/car-auction/internal/service"
+	"github.com/ksj/car-auction/internal/ws"
 	"github.com/stretchr/testify/assert"
 	"gorm.io/gorm"
 )
@@ -47,13 +48,15 @@ func setupRouter(t *testing.T) *mux.Router {
 	// 1) in-memory DB + AutoMigrate
 	db := mustOpenInMemoryDB(t)
 
+	hub := ws.NewHub()
+
 	// 2) 레포 + 서비스
 	auctionRepo := repo.NewAuctionRepo(db)
 	bidRepo := repo.NewBidRepo(db)
 	userRepo := repo.NewUserRepo(db)
 
 	asvc := service.NewAuctionService(auctionRepo)
-	bsvc := service.NewBidService(bidRepo)
+	bsvc := service.NewBidService(bidRepo, hub)
 	usvc := service.NewUserService(userRepo)
 
 	// 3) 라우터
